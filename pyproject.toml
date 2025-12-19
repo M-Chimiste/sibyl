@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sibyl"
+version = "0.1.0"
+description = "Hybrid document-to-markdown Python library with intelligent extraction routing"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["document", "markdown", "ocr", "pdf", "extraction", "llm", "rag"]
+
+dependencies = [
+    "pydantic>=2.0",
+    "docling>=2.0",
+    "markitdown>=0.0.1",
+    "pymupdf>=1.24",
+    "pdf2image>=1.17",
+    "pillow>=10.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "mypy>=1.8",
+    "ruff>=0.4",
+]
+easyocr = [
+    "easyocr>=1.7",
+]
+all = [
+    "sibyl[dev,easyocr]",
+]
+
+[project.urls]
+Homepage = "https://github.com/sibyl-doc/sibyl"
+Documentation = "https://github.com/sibyl-doc/sibyl#readme"
+Repository = "https://github.com/sibyl-doc/sibyl"
+Issues = "https://github.com/sibyl-doc/sibyl/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sibyl*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
