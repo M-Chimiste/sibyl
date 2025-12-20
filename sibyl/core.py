@@ -82,6 +82,8 @@ Do not include any preamble, just provide the description."""
         ocr_images: bool = True,
         describe_images: bool = False,
         merge_tables: bool = False,
+        check_quality: bool = False,
+        quality_threshold: float = 0.7,
         ocr_threshold: float | None = None,
         pages: list[int] | None = None,
         on_progress: ProgressCallback | None = None,
@@ -96,6 +98,10 @@ Do not include any preamble, just provide the description."""
             describe_images: Use VLM to describe images (replaces <!-- image --> tags)
             merge_tables: Merge horizontally-split tables into single tables.
                 Useful for PDFs that display tables in multiple columns.
+            check_quality: Check text quality and re-extract poor pages with OCR.
+                Detects garbled text, encoding issues, and missing content.
+            quality_threshold: Minimum quality score (0.0-1.0) for text.
+                Pages below this threshold are re-extracted with OCR.
             ocr_threshold: Override default OCR threshold
             pages: Specific pages to process (None = all)
             on_progress: Optional progress callback (stage, current, total).
@@ -121,6 +127,8 @@ Do not include any preamble, just provide the description."""
             ocr_images=ocr_images,
             describe_images=describe_images,
             merge_split_tables=merge_tables,
+            check_quality=check_quality,
+            quality_threshold=quality_threshold,
             ocr_threshold=ocr_threshold or self.ocr_threshold,
             pages=pages,
         )

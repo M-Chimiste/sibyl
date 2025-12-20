@@ -12,6 +12,7 @@ from sibyl.extractors.docling_ext import DoclingExtractor
 from sibyl.extractors.markitdown_ext import MarkItDownExtractor
 from sibyl.extractors.vision_ocr import VisionOCRExtractor
 from sibyl.models import ExtractOptions, PageResult, PdfEngine, ProgressCallback
+from sibyl.utils.text_quality import analyze_text_quality, clean_text
 
 if TYPE_CHECKING:
     from sibyl.backends.base import OCRBackend
@@ -118,7 +119,8 @@ class ExtractionRouter:
 
             # Check if extraction produced meaningful content
             if self._is_valid_extraction(result):
-                return result
+                # Clean text and optionally re-extract poor quality pages
+                return self._clean_and_validate_pages(result, file_path, options, on_progress)
             logger.warning(f"{primary_name} produced empty/invalid result, trying {fallback_name}")
         except Exception as e:
             logger.warning(f"{primary_name} extraction failed: {e}, trying {fallback_name}")
@@ -132,7 +134,8 @@ class ExtractionRouter:
                 on_progress("extracting", 1, 1)
 
             if self._is_valid_extraction(result):
-                return result
+                # Clean text and optionally re-extract poor quality pages
+                return self._clean_and_validate_pages(result, file_path, options, on_progress)
             logger.warning(f"{fallback_name} produced empty/invalid result")
         except Exception as e:
             logger.warning(f"{fallback_name} extraction failed: {e}")
@@ -140,20 +143,143 @@ class ExtractionRouter:
         # Last resort: OCR if available
         if self._vision_ocr:
             logger.info("Falling back to OCR extraction")
-            return self._vision_ocr.extract(file_path, options, on_progress)
+            result = self._vision_ocr.extract(file_path, options, on_progress)
+            # Clean OCR result too
+            return self._clean_and_validate_pages(result, file_path, options, on_progress)
 
         raise ValueError(
             f"Both {primary_name} and {fallback_name} extraction failed. "
             "Consider providing an OCR backend for fallback."
         )
 
-    def _is_valid_extraction(self, result: ExtractionResult) -> bool:
-        """Check if extraction result has meaningful content."""
+    def _is_valid_extraction(
+        self,
+        result: ExtractionResult,
+        check_quality: bool = False,
+        quality_threshold: float = 0.7,
+    ) -> bool:
+        """Check if extraction result has meaningful content.
+
+        Args:
+            result: Extraction result to validate
+            check_quality: Whether to check text quality/coherence
+            quality_threshold: Minimum quality score (0.0-1.0)
+
+        Returns:
+            True if extraction is valid
+        """
         if not result.pages:
             return False
+
         # Check if there's actual content (not just whitespace)
         total_content = "".join(p.content for p in result.pages).strip()
-        return len(total_content) > 10  # Arbitrary minimum threshold
+        if len(total_content) <= 10:
+            return False
+
+        # Optionally check text quality
+        if check_quality:
+            quality = analyze_text_quality(total_content, threshold=quality_threshold)
+            if not quality.is_acceptable:
+                logger.warning(f"Text quality check failed: {quality}")
+                return False
+
+        return True
+
+    def _clean_and_validate_pages(
+        self,
+        result: ExtractionResult,
+        file_path: Path,
+        options: ExtractOptions,
+        on_progress: ProgressCallback | None = None,
+    ) -> ExtractionResult:
+        """Clean extracted text and re-extract poor quality pages with OCR.
+
+        Args:
+            result: Initial extraction result
+            file_path: Path to source document
+            options: Extraction options
+            on_progress: Progress callback
+
+        Returns:
+            Cleaned and validated extraction result
+        """
+        if not options.check_quality or not self._vision_ocr:
+            # Just clean the text without OCR fallback
+            cleaned_pages = []
+            for page in result.pages:
+                cleaned_content = clean_text(page.content)
+                cleaned_pages.append(PageResult(
+                    page_number=page.page_number,
+                    content=cleaned_content,
+                    extraction_method=page.extraction_method,
+                    confidence=page.confidence,
+                    images=page.images,
+                    tables=page.tables,
+                ))
+            return ExtractionResult(
+                pages=cleaned_pages,
+                title=result.title,
+                author=result.author,
+            )
+
+        # Check quality of each page and collect pages needing OCR
+        good_pages: list[PageResult] = []
+        pages_needing_ocr: list[int] = []
+
+        for page in result.pages:
+            # Clean the text first
+            cleaned_content = clean_text(page.content)
+            quality = analyze_text_quality(
+                cleaned_content,
+                threshold=options.quality_threshold,
+            )
+
+            if quality.is_acceptable:
+                good_pages.append(PageResult(
+                    page_number=page.page_number,
+                    content=cleaned_content,
+                    extraction_method=page.extraction_method,
+                    confidence=page.confidence,
+                    images=page.images,
+                    tables=page.tables,
+                ))
+            else:
+                logger.info(
+                    f"Page {page.page_number} quality check failed ({quality.score:.2f}), "
+                    f"will re-extract with OCR. Issues: {quality.issues}"
+                )
+                pages_needing_ocr.append(page.page_number)
+
+        # Re-extract poor quality pages with OCR
+        if pages_needing_ocr and self._vision_ocr:
+            ocr_options = ExtractOptions(
+                extract_tables=options.extract_tables,
+                extract_images=options.extract_images,
+                ocr_images=options.ocr_images,
+                ocr_threshold=options.ocr_threshold,
+                pages=pages_needing_ocr,
+            )
+            ocr_result = self._vision_ocr.extract(file_path, ocr_options, on_progress)
+
+            # Clean OCR results too
+            for page in ocr_result.pages:
+                good_pages.append(PageResult(
+                    page_number=page.page_number,
+                    content=clean_text(page.content),
+                    extraction_method=page.extraction_method,
+                    confidence=page.confidence,
+                    images=page.images,
+                    tables=page.tables,
+                ))
+
+        # Sort pages by page number
+        good_pages.sort(key=lambda p: p.page_number)
+
+        return ExtractionResult(
+            pages=good_pages,
+            title=result.title,
+            author=result.author,
+        )
 
     def _extract_simple(
         self,

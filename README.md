@@ -131,6 +131,8 @@ result = sb.process(
     ocr_images=True,          # OCR text within images (default: True)
     describe_images=False,    # Use VLM to describe images (default: False)
     merge_tables=False,       # Merge horizontally-split tables (default: False)
+    check_quality=False,      # Check text quality and re-extract with OCR (default: False)
+    quality_threshold=0.7,    # Minimum quality score for text (default: 0.7)
     pages=[1, 2, 3],          # Process specific pages (default: all)
 )
 ```
@@ -173,6 +175,33 @@ print(f"Tables merged: {result.stats.tables_merged}")
 ```
 
 This is useful for converting documents to database-friendly formats.
+
+### Quality Checking and Hybrid Extraction
+
+Native PDF extraction can sometimes produce garbled text due to encoding issues, embedded fonts, or corrupted content. When `check_quality=True`, Sibyl analyzes extracted text for common issues and automatically re-extracts problem pages using OCR:
+
+```python
+result = sb.process(
+    "document.pdf",
+    check_quality=True,       # Enable quality checking
+    quality_threshold=0.7,    # Pages below this score use OCR (0.0-1.0)
+)
+```
+
+**Quality checks detect:**
+- Replacement characters (�) indicating encoding failures
+- Block/box drawing characters (█) from missing fonts
+- Unescaped HTML entities (`&amp;` instead of `&`)
+- Excessive whitespace indicating missing text
+- Control characters and other anomalies
+
+**Text cleaning is always applied:**
+- HTML entity decoding (`&amp;` → `&`)
+- Unicode normalization
+- Control character removal
+- Whitespace normalization
+
+This hybrid approach gives you the best of both worlds: fast native extraction for clean pages and OCR fallback for problematic content.
 
 ### Progress Callbacks
 
@@ -553,6 +582,7 @@ result.stats.pages_processed: int
 result.stats.ocr_pages: int
 result.stats.native_pages: int
 result.stats.tables_merged: int  # Number of split tables merged (when merge_tables=True)
+result.stats.quality_reextracted_pages: int  # Pages re-extracted due to quality issues
 ```
 
 ## Supported Formats

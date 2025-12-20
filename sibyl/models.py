@@ -68,6 +68,9 @@ class ProcessingStats(BaseModel):
     ocr_pages: int = Field(default=0, description="Number of pages processed with OCR")
     native_pages: int = Field(default=0, description="Number of pages with native text extraction")
     tables_merged: int = Field(default=0, description="Number of horizontally-split tables merged")
+    quality_reextracted_pages: int = Field(
+        default=0, description="Pages re-extracted due to quality issues"
+    )
 
 
 class Chunk(BaseModel):
@@ -178,6 +181,16 @@ class ExtractOptions(BaseModel):
     merge_split_tables: bool = Field(
         default=False,
         description="Merge horizontally-split tables (e.g., 4-column tables with repeated headers into 2-column)",
+    )
+    check_quality: bool = Field(
+        default=False,
+        description="Check text quality and re-extract poor pages with OCR",
+    )
+    quality_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum quality score for text (below triggers OCR re-extraction)",
     )
     ocr_threshold: float = Field(
         default=0.8,

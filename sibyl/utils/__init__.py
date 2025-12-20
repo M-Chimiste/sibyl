@@ -20,6 +20,12 @@ from sibyl.utils.pdf import (
     render_page_to_image,
 )
 from sibyl.utils.tables import merge_split_tables
+from sibyl.utils.text_quality import (
+    QualityScore,
+    analyze_text_quality,
+    clean_text,
+    is_coherent_text,
+)
 
 __all__ = [
     # Image utilities
@@ -38,4 +44,9 @@ __all__ = [
     "extract_images_from_page",
     # Table utilities
     "merge_split_tables",
+    # Text quality utilities
+    "QualityScore",
+    "analyze_text_quality",
+    "clean_text",
+    "is_coherent_text",
 ]
