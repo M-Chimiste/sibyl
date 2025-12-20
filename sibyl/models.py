@@ -67,6 +67,7 @@ class ProcessingStats(BaseModel):
     pages_processed: int = Field(ge=0, description="Number of pages processed")
     ocr_pages: int = Field(default=0, description="Number of pages processed with OCR")
     native_pages: int = Field(default=0, description="Number of pages with native text extraction")
+    tables_merged: int = Field(default=0, description="Number of horizontally-split tables merged")
 
 
 class Chunk(BaseModel):
@@ -173,6 +174,10 @@ class ExtractOptions(BaseModel):
     describe_images: bool = Field(
         default=False,
         description="Use VLM to describe images and replace <!-- image --> placeholders",
+    )
+    merge_split_tables: bool = Field(
+        default=False,
+        description="Merge horizontally-split tables (e.g., 4-column tables with repeated headers into 2-column)",
     )
     ocr_threshold: float = Field(
         default=0.8,

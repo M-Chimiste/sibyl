@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import fitz  # PyMuPDF
-
 if TYPE_CHECKING:
+    import fitz
     from PIL import Image
+
+
+def _get_fitz():
+    """Lazy import of fitz (PyMuPDF) to avoid SWIG warnings at import time."""
+    import fitz
+    return fitz
 
 
 def get_page_count(file_path: Path) -> int:
@@ -20,6 +26,7 @@ def get_page_count(file_path: Path) -> int:
     Returns:
         Number of pages
     """
+    fitz = _get_fitz()
     with fitz.open(file_path) as doc:
         return len(doc)
 
@@ -33,6 +40,7 @@ def get_pdf_metadata(file_path: Path) -> dict:
     Returns:
         Dictionary with title, author, and other metadata
     """
+    fitz = _get_fitz()
     with fitz.open(file_path) as doc:
         metadata = doc.metadata or {}
         return {
@@ -59,6 +67,7 @@ def get_page_text_density(file_path: Path, page_number: int) -> float:
     Returns:
         Float between 0.0 and 1.0 indicating text density
     """
+    fitz = _get_fitz()
     with fitz.open(file_path) as doc:
         if page_number >= len(doc):
             return 0.0
@@ -91,6 +100,7 @@ def is_native_pdf(file_path: Path, threshold: float = 0.1) -> bool:
     Returns:
         True if PDF has sufficient native text
     """
+    fitz = _get_fitz()
     with fitz.open(file_path) as doc:
         if len(doc) == 0:
             return False
@@ -113,6 +123,7 @@ def get_page_classification(file_path: Path, threshold: float = 0.1) -> list[str
     Returns:
         List of classifications per page
     """
+    fitz = _get_fitz()
     classifications = []
     with fitz.open(file_path) as doc:
         for page_num in range(len(doc)):
@@ -141,6 +152,7 @@ def render_page_to_image(
     """
     from PIL import Image as PILImage
 
+    fitz = _get_fitz()
     with fitz.open(file_path) as doc:
         page = doc[page_number]
 
@@ -169,6 +181,7 @@ def extract_images_from_page(file_path: Path, page_number: int) -> list[dict]:
     """
     from PIL import Image as PILImage
 
+    fitz = _get_fitz()
     images = []
     with fitz.open(file_path) as doc:
         page = doc[page_number]
@@ -194,7 +207,3 @@ def extract_images_from_page(file_path: Path, page_number: int) -> list[dict]:
                 })
 
     return images
-
-
-# Need io for BytesIO
-import io

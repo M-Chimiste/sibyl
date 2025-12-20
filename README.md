@@ -14,7 +14,7 @@ Sibyl automatically selects the best extraction method for each document—using
 - **Multiple Backends**: Support for local (Ollama, LMStudio) and cloud (OpenAI, Anthropic, Gemini) VLM providers
 - **Hybrid Extraction**: Handle documents with mixed native and scanned pages
 - **RAG-Ready Chunking**: Built-in page-based, size-based, and section-based chunking
-- **Table Extraction**: Preserves tables as markdown
+- **Table Extraction**: Preserves tables as markdown with optional split-table merging
 - **Image Handling**: Extract embedded images with optional VLM descriptions
 - **Batch Processing**: Process multiple documents in parallel
 
@@ -130,6 +130,7 @@ result = sb.process(
     extract_images=True,      # Extract embedded images (default: True)
     ocr_images=True,          # OCR text within images (default: True)
     describe_images=False,    # Use VLM to describe images (default: False)
+    merge_tables=False,       # Merge horizontally-split tables (default: False)
     pages=[1, 2, 3],          # Process specific pages (default: all)
 )
 ```
@@ -142,6 +143,36 @@ When `describe_images=True`, Sibyl replaces `<!-- image -->` placeholders with V
 result = sb.process("document.pdf", describe_images=True)
 # Markdown will contain: <!-- image: A bar chart showing quarterly sales... -->
 ```
+
+### Merging Split Tables
+
+PDFs often display tables in multiple columns to save space. For example, a reference table might appear as:
+
+```
+| Level | XP     | Level | XP      |
+|-------|--------|-------|---------|
+| 1     | 100    | 6     | 14000   |
+| 2     | 300    | 7     | 23000   |
+```
+
+When `merge_tables=True`, Sibyl automatically detects these horizontally-split tables and merges them into a single table:
+
+```python
+result = sb.process("document.pdf", merge_tables=True)
+
+# The table is now merged into a single 2-column table:
+# | Level | XP     |
+# |-------|--------|
+# | 1     | 100    |
+# | 2     | 300    |
+# | 6     | 14000  |
+# | 7     | 23000  |
+
+# Check how many tables were merged
+print(f"Tables merged: {result.stats.tables_merged}")
+```
+
+This is useful for converting documents to database-friendly formats.
 
 ### Progress Callbacks
 
@@ -521,6 +552,7 @@ result.stats.methods_used: list[str]
 result.stats.pages_processed: int
 result.stats.ocr_pages: int
 result.stats.native_pages: int
+result.stats.tables_merged: int  # Number of split tables merged (when merge_tables=True)
 ```
 
 ## Supported Formats

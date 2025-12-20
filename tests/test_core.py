@@ -368,3 +368,126 @@ class TestSibylCreateErrorResult:
         assert result.tables == []
         assert result.images == []
         assert result.metadata.file_type == "pdf"
+
+
+class TestSibylMergeTables:
+    """Tests for the merge_tables parameter in process()."""
+
+    def test_merge_tables_disabled_by_default(self, tmp_path):
+        """Test that merge_tables is disabled by default."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello world")
+
+        sb = Sibyl()
+
+        mock_result = ExtractionResult(
+            pages=[PageResult(
+                page_number=1,
+                content="| A | B | A | B |\n|---|---|---|---|\n| 1 | 2 | 3 | 4 |",
+                extraction_method="markitdown",
+                confidence=1.0,
+                images=[],
+                tables=[],
+            )],
+            title=None,
+            author=None,
+        )
+        sb._router.route = Mock(return_value=mock_result)
+
+        result = sb.process(test_file)
+
+        # Table should NOT be merged (still 4 columns)
+        assert "| A | B | A | B |" in result.markdown
+        assert result.stats.tables_merged == 0
+
+    def test_merge_tables_enabled(self, tmp_path):
+        """Test that merge_tables=True merges split tables."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello world")
+
+        sb = Sibyl()
+
+        mock_result = ExtractionResult(
+            pages=[PageResult(
+                page_number=1,
+                content="| A | B | A | B |\n|---|---|---|---|\n| 1 | 2 | 3 | 4 |",
+                extraction_method="markitdown",
+                confidence=1.0,
+                images=[],
+                tables=[],
+            )],
+            title=None,
+            author=None,
+        )
+        sb._router.route = Mock(return_value=mock_result)
+
+        result = sb.process(test_file, merge_tables=True)
+
+        # Table should be merged (now 2 columns)
+        assert "| A | B |" in result.markdown
+        assert "| A | B | A | B |" not in result.markdown
+        assert result.stats.tables_merged == 1
+
+    def test_merge_tables_count_in_stats(self, tmp_path):
+        """Test that tables_merged count is tracked in stats."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello world")
+
+        sb = Sibyl()
+
+        # Content with two split tables
+        content = """| X | Y | X | Y |
+|---|---|---|---|
+| a | b | c | d |
+
+Some text.
+
+| P | Q | P | Q |
+|---|---|---|---|
+| 1 | 2 | 3 | 4 |
+"""
+        mock_result = ExtractionResult(
+            pages=[PageResult(
+                page_number=1,
+                content=content,
+                extraction_method="markitdown",
+                confidence=1.0,
+                images=[],
+                tables=[],
+            )],
+            title=None,
+            author=None,
+        )
+        sb._router.route = Mock(return_value=mock_result)
+
+        result = sb.process(test_file, merge_tables=True)
+
+        assert result.stats.tables_merged == 2
+
+    def test_merge_tables_no_matching_tables(self, tmp_path):
+        """Test merge_tables with no split tables to merge."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Hello world")
+
+        sb = Sibyl()
+
+        # Regular 2-column table
+        mock_result = ExtractionResult(
+            pages=[PageResult(
+                page_number=1,
+                content="| Name | Value |\n|---|---|\n| A | 1 |",
+                extraction_method="markitdown",
+                confidence=1.0,
+                images=[],
+                tables=[],
+            )],
+            title=None,
+            author=None,
+        )
+        sb._router.route = Mock(return_value=mock_result)
+
+        result = sb.process(test_file, merge_tables=True)
+
+        # Table should be unchanged
+        assert "| Name | Value |" in result.markdown
+        assert result.stats.tables_merged == 0

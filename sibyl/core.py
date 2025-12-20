@@ -20,6 +20,7 @@ from sibyl.models import (
 )
 from sibyl.router import ExtractionRouter
 from sibyl.utils.pdf import get_page_count, get_pdf_metadata
+from sibyl.utils.tables import merge_split_tables
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -80,6 +81,7 @@ Do not include any preamble, just provide the description."""
         extract_images: bool = True,
         ocr_images: bool = True,
         describe_images: bool = False,
+        merge_tables: bool = False,
         ocr_threshold: float | None = None,
         pages: list[int] | None = None,
         on_progress: ProgressCallback | None = None,
@@ -92,6 +94,8 @@ Do not include any preamble, just provide the description."""
             extract_images: Whether to extract embedded images
             ocr_images: Whether to OCR text in images
             describe_images: Use VLM to describe images (replaces <!-- image --> tags)
+            merge_tables: Merge horizontally-split tables into single tables.
+                Useful for PDFs that display tables in multiple columns.
             ocr_threshold: Override default OCR threshold
             pages: Specific pages to process (None = all)
             on_progress: Optional progress callback (stage, current, total).
@@ -116,6 +120,7 @@ Do not include any preamble, just provide the description."""
             extract_images=extract_images,
             ocr_images=ocr_images,
             describe_images=describe_images,
+            merge_split_tables=merge_tables,
             ocr_threshold=ocr_threshold or self.ocr_threshold,
             pages=pages,
         )
@@ -142,20 +147,26 @@ Do not include any preamble, just provide the description."""
         )
         native_count = len(extraction_result.pages) - ocr_count
 
+        # Combine all page content into full markdown
+        markdown = "\n\n".join(page.content for page in extraction_result.pages)
+
+        # Merge split tables if requested
+        tables_merged = 0
+        if merge_tables:
+            markdown, tables_merged = merge_split_tables(markdown)
+
+        # Describe images if requested
+        if describe_images and self.ocr_backend is not None:
+            markdown = self._describe_images_in_markdown(file_path, markdown, on_progress)
+
         stats = ProcessingStats(
             total_time_seconds=time.time() - start_time,
             methods_used=list(methods_used),
             pages_processed=len(extraction_result.pages),
             ocr_pages=ocr_count,
             native_pages=native_count,
+            tables_merged=tables_merged,
         )
-
-        # Combine all page content into full markdown
-        markdown = "\n\n".join(page.content for page in extraction_result.pages)
-
-        # Describe images if requested
-        if describe_images and self.ocr_backend is not None:
-            markdown = self._describe_images_in_markdown(file_path, markdown, on_progress)
 
         return ProcessingResult(
             markdown=markdown,

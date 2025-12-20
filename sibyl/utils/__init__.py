@@ -19,6 +19,7 @@ from sibyl.utils.pdf import (
     is_native_pdf,
     render_page_to_image,
 )
+from sibyl.utils.tables import merge_split_tables
 
 __all__ = [
     # Image utilities
@@ -35,4 +36,6 @@ __all__ = [
     "get_page_classification",
     "render_page_to_image",
     "extract_images_from_page",
+    # Table utilities
+    "merge_split_tables",
 ]
