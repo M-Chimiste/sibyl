@@ -39,7 +39,7 @@ class PageResult(BaseModel):
 
     page_number: int = Field(ge=1, description="Page number (1-indexed)")
     content: str = Field(description="Markdown content extracted from page")
-    extraction_method: Literal["docling", "vision_ocr", "markitdown"] = Field(
+    extraction_method: Literal["docling", "vision_ocr", "markitdown", "pymupdf"] = Field(
         description="Method used to extract this page"
     )
     confidence: float | None = Field(

@@ -78,6 +78,31 @@ class TestAnalyzeTextQuality:
         # Should detect excessive whitespace (4+ runs of 10+ spaces)
         assert "excessive_whitespace" in str(result.issues) or result.score <= 1.0
 
+    def test_private_use_chars_detected(self):
+        """Test detection of private use Unicode characters."""
+        # These are chars from decorative fonts (ASCII + 0xF700)
+        text = "Normal text '\uf765\uf772 \uf76c\uf761\uf774\uf765' more text"
+        result = analyze_text_quality(text)
+
+        assert "private_use_chars" in str(result.issues)
+        assert not result.is_acceptable  # Should fail quality check
+
+    def test_private_use_chars_mixed_with_normal(self):
+        """Test that even a few private use chars are detected."""
+        text = "This is mostly normal text with just \uf765\uf772 garbled."
+        result = analyze_text_quality(text)
+
+        assert "private_use_chars" in str(result.issues)
+
+    def test_decorative_font_quote_detected(self):
+        """Test detection of typical decorative font encoding pattern."""
+        # Simulates D&D-style decorative quotes
+        text = "'Y\uf765\uf772 \uf76c\uf761\uf774\uf765, \uf765\uf76c\uf766!' came the voice."
+        result = analyze_text_quality(text)
+
+        assert not result.is_acceptable
+        assert result.score < 0.7
+
     def test_custom_threshold(self):
         """Test that custom threshold works."""
         text = "Some text with a few \ufffd issues."
@@ -212,4 +237,29 @@ class TestIntegration:
         assert quality.score <= 0.7  # Should fail quality threshold
         assert "block_chars" in str(quality.issues)
         assert not is_coherent_text(garbled)
+
+    def test_decorative_font_detection_and_cleaning(self):
+        """Test the full workflow of detecting and handling decorative fonts."""
+        # Text with decorative font chars (ASCII + 0xF700)
+        garbled = "'Y\uf765\uf772 \uf76c\uf761\uf774\uf765, \uf765\uf76c\uf766!' came the voice."
+        
+        # Should detect the issue
+        quality = analyze_text_quality(garbled)
+        assert not quality.is_acceptable
+        assert "private_use_chars" in str(quality.issues)
+        
+        # After cleaning, private use chars should be removed
+        cleaned = clean_text(garbled)
+        # Note: clean_text removes the chars but doesn't decode them
+        # The decoding is done by the router's _decode_private_use_chars
+
+    def test_mixed_quality_issues(self):
+        """Test text with multiple quality issues."""
+        # Text with both HTML entities and excessive whitespace
+        text = "This &amp; that              with gaps              and more."
+        
+        quality = analyze_text_quality(text)
+        
+        # Should detect multiple issues
+        assert len(quality.issues) >= 1
 

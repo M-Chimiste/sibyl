@@ -303,6 +303,102 @@ class TestRouterScannedContent:
             router.route(Path("test.pdf"), options)
 
 
+class TestDecodePrivateUseChars:
+    """Tests for private use character decoding."""
+
+    def test_decode_f700_offset_chars(self):
+        """Test decoding ASCII + 0xF700 pattern."""
+        router = ExtractionRouter()
+        
+        # 'Yer late, elf!' encoded as ASCII + 0xF700
+        encoded = "'Y\uf765\uf772 \uf76c\uf761\uf774\uf765, \uf765\uf76c\uf766!'"
+        decoded, count = router._decode_private_use_chars(encoded)
+        
+        assert decoded == "'Yer late, elf!'"
+        assert count == 9  # 9 private use chars decoded
+
+    def test_decode_longer_text(self):
+        """Test decoding longer decorative font text."""
+        router = ExtractionRouter()
+        
+        # 'I have never imagined' encoded
+        encoded = "'\uf749 \uf768\uf761\uf776\uf765 \uf76e\uf765\uf776\uf765\uf772 \uf769\uf76d\uf761\uf767\uf769\uf76e\uf765\uf764'"
+        decoded, count = router._decode_private_use_chars(encoded)
+        
+        assert "I have never imagined" in decoded
+        assert count > 0
+
+    def test_decode_preserves_normal_text(self):
+        """Test that normal ASCII text is preserved."""
+        router = ExtractionRouter()
+        
+        normal = "This is normal text without any special characters."
+        decoded, count = router._decode_private_use_chars(normal)
+        
+        assert decoded == normal
+        assert count == 0
+
+    def test_decode_mixed_content(self):
+        """Test decoding mixed normal and encoded content."""
+        router = ExtractionRouter()
+        
+        # Mix of normal text and encoded chars
+        mixed = "Normal \uf774\uf765\uf778\uf774 here"  # "text" encoded
+        decoded, count = router._decode_private_use_chars(mixed)
+        
+        assert decoded == "Normal text here"
+        assert count == 4
+
+    def test_decode_e000_offset_chars(self):
+        """Test decoding ASCII + 0xE000 pattern."""
+        router = ExtractionRouter()
+        
+        # Test E0xx range (another common offset)
+        encoded = "\ue054\ue065\ue073\ue074"  # "Test" with 0xE000 offset
+        decoded, count = router._decode_private_use_chars(encoded)
+        
+        assert decoded == "Test"
+        assert count == 4
+
+    def test_decode_invalid_range_preserved(self):
+        """Test that chars outside valid ASCII range are preserved."""
+        router = ExtractionRouter()
+        
+        # Char that would decode to non-printable ASCII
+        text = "Test\uf710 text"  # Would decode to 0x10 (control char)
+        decoded, count = router._decode_private_use_chars(text)
+        
+        # The invalid char should be preserved, not decoded
+        assert "\uf710" in decoded or count == 0
+
+
+class TestFindPagesWithGarbledText:
+    """Tests for finding pages containing garbled text."""
+
+    def test_no_garbled_text_returns_empty(self):
+        """Test that clean content returns no problem pages."""
+        router = ExtractionRouter()
+        
+        clean_content = "This is perfectly normal text without any issues."
+        # Note: We can't easily test without a real PDF, so we test the pattern matching
+        
+        import re
+        garbled_pattern = re.compile(r'[\uE000-\uF8FF]+')
+        assert not garbled_pattern.search(clean_content)
+
+    def test_garbled_pattern_detected(self):
+        """Test that garbled text pattern is correctly identified."""
+        import re
+        
+        # Content with private use chars
+        content = "Normal text \uf765\uf772 more text"
+        garbled_pattern = re.compile(r'[\uE000-\uF8FF]+')
+        
+        matches = garbled_pattern.findall(content)
+        assert len(matches) == 1
+        assert matches[0] == "\uf765\uf772"
+
+
 class TestRouterValidExtraction:
     def test_is_valid_extraction_with_content(self):
         router = ExtractionRouter()

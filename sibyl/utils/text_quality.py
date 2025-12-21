@@ -63,12 +63,14 @@ def analyze_text_quality(text: str, threshold: float = 0.7) -> QualityScore:
             penalties.append(min(0.4, ratio * 20))
 
     # Check for private use Unicode characters
+    # These often indicate custom font glyphs that weren't properly extracted
     private_use = sum(1 for c in text if unicodedata.category(c) == "Co")
     if private_use > 0:
         ratio = private_use / len(text)
-        if ratio > 0.01:
+        if ratio > 0.005:  # Even a small amount is problematic
             issues.append(f"private_use_chars ({private_use})")
-            penalties.append(min(0.4, ratio * 10))
+            # Strong penalty - these indicate font extraction failures
+            penalties.append(min(0.5, ratio * 20 + 0.2))
 
     # Check for HTML entities (sign of improper decoding)
     html_entities = re.findall(r"&(?:amp|lt|gt|quot|nbsp|apos|#\d+|#x[0-9a-fA-F]+);", text)

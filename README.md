@@ -13,6 +13,7 @@ Sibyl automatically selects the best extraction method for each document—using
 - **Multiple PDF Engines**: Choose between Docling and MarkItDown with automatic fallback
 - **Multiple Backends**: Support for local (Ollama, LMStudio) and cloud (OpenAI, Anthropic, Gemini) VLM providers
 - **Hybrid Extraction**: Handle documents with mixed native and scanned pages
+- **Quality Checking**: Detects garbled text from decorative fonts and encoding issues with automatic multi-tier fixes (character decoding → text replacement → surgical OCR)
 - **RAG-Ready Chunking**: Built-in page-based, size-based, and section-based chunking
 - **Table Extraction**: Preserves tables as markdown with optional split-table merging
 - **Image Handling**: Extract embedded images with optional VLM descriptions
@@ -178,30 +179,40 @@ This is useful for converting documents to database-friendly formats.
 
 ### Quality Checking and Hybrid Extraction
 
-Native PDF extraction can sometimes produce garbled text due to encoding issues, embedded fonts, or corrupted content. When `check_quality=True`, Sibyl analyzes extracted text for common issues and automatically re-extracts problem pages using OCR:
+Native PDF extraction can sometimes produce garbled text due to encoding issues, decorative fonts, or corrupted content. When `check_quality=True`, Sibyl analyzes extracted text for common issues and automatically fixes them using a multi-tier approach:
 
 ```python
 result = sb.process(
     "document.pdf",
     check_quality=True,       # Enable quality checking
-    quality_threshold=0.7,    # Pages below this score use OCR (0.0-1.0)
+    quality_threshold=0.7,    # Minimum acceptable quality score (0.0-1.0)
 )
 ```
 
 **Quality checks detect:**
 - Replacement characters (�) indicating encoding failures
+- Private use Unicode characters from decorative fonts
 - Block/box drawing characters (█) from missing fonts
 - Unescaped HTML entities (`&amp;` instead of `&`)
 - Excessive whitespace indicating missing text
 - Control characters and other anomalies
 
+**Multi-tier fix approach (in order):**
+
+1. **Character Decoding** (instant, no network) - Many decorative fonts map ASCII to Unicode private use area (e.g., `'e'` → `\uf765`). Sibyl automatically decodes these back to readable text.
+
+2. **PyMuPDF Text Replacement** (fast, no network) - If decoding fails, Sibyl attempts to replace garbled sections with correctly-extracted text from PyMuPDF.
+
+3. **Surgical OCR** (targeted, uses network) - As a last resort, Sibyl locates the exact regions with garbled text on the PDF page, crops just those small areas, and OCRs only those regions—not entire pages.
+
 **Text cleaning is always applied:**
 - HTML entity decoding (`&amp;` → `&`)
 - Unicode normalization
+- Private use character decoding
 - Control character removal
 - Whitespace normalization
 
-This hybrid approach gives you the best of both worlds: fast native extraction for clean pages and OCR fallback for problematic content.
+This intelligent approach gives you fast native extraction with automatic fixes for problematic content, minimizing slow OCR calls to only the specific regions that need them.
 
 ### Progress Callbacks
 
@@ -582,7 +593,8 @@ result.stats.pages_processed: int
 result.stats.ocr_pages: int
 result.stats.native_pages: int
 result.stats.tables_merged: int  # Number of split tables merged (when merge_tables=True)
-result.stats.quality_reextracted_pages: int  # Pages re-extracted due to quality issues
+result.stats.quality_checked_pages: int  # Pages analyzed for quality issues
+result.stats.quality_fallback_pages: int  # Pages fixed via fallback methods
 ```
 
 ## Supported Formats
